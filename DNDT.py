@@ -169,15 +169,15 @@ if __name__ == "__main__":
     # torch.manual_seed(1943)
 
     # seed = random.seed(1990)
-    # _x, _y = get_german_data()
-    _x, _y = get_connect4_data()
+    _x, _y = get_german_data()
+    # _x, _y = get_connect4_data()
 
     X_train, X_test, y_train, y_test = train_test_split(_x, _y, train_size=0.70)
     # print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
 
     d = X_train.shape[1]
     num_cut = [1, 1, 1, 1, 1, 1, 1, 1]  # "Petal length" and "Petal width"
-    num_class = 4
+    num_class = 3
     epoch = 1000
     temperature = 0.1
 
@@ -195,5 +195,5 @@ if __name__ == "__main__":
     acc_ensemble = accuracy_score(y_test, y_pred_ensemble)
     print("Ensemble Accuracy:", acc_ensemble)
 
-    # cm = ConfusionMatrixDisplay.from_predictions(y_test[:, 0], y_pred_ensemble)
-    # plt.show()
+    cm = ConfusionMatrixDisplay.from_predictions(y_test, y_pred_ensemble)
+    plt.show()
