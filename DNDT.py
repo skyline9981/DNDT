@@ -14,10 +14,10 @@ from sklearn.preprocessing import OneHotEncoder
 from connect4_loader import get_connect4_data
 from german_loader import get_german_data
 import random
-import warnings
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
 
 
 class DNDT_Classifier(nn.Module):
@@ -42,13 +42,11 @@ class DNDT_Classifier(nn.Module):
         self.cut_points_list = [cp.to(device) for cp in self.cut_points_list]
         self.leaf_score = self.leaf_score.to(device)
 
-    # 计算克罗内克积
     def torch_kron_prod(self, a, b):
         res = torch.einsum("ij,ik->ijk", [a, b])
         res = torch.reshape(res, [-1, np.prod(res.shape[1:])])
         return res.to(device)
 
-    # 软分箱算法
     def torch_bin(self, x, cut_points, temperature):
         # x is a N-by-1 matrix (column vector)
         # cut_points is a D-dim vector (D is the number of cut-points)
@@ -66,7 +64,6 @@ class DNDT_Classifier(nn.Module):
         res = F.softmax(h, dim=1)
         return res
 
-    # 建树
     def nn_decision_tree(self, x):
         # cut_points_list contains the cut_points for each dimension of feature
         leaf = reduce(
@@ -81,7 +78,7 @@ class DNDT_Classifier(nn.Module):
     def fit(self, X_train, y_train):
         x = torch.from_numpy(X_train.astype(np.float32)).to(device)
         y = torch.from_numpy(y_train.astype(np.int64)).squeeze().to(device)
-        for i in range(1000):
+        for i in range(self.epoch):
             self.optimizer.zero_grad()
             y_pred = self.nn_decision_tree(x)
             loss = self.loss_function(y_pred, y)
@@ -106,26 +103,6 @@ class DNDT_Classifier(nn.Module):
         y_pred = self.nn_decision_tree(x)
         return y_pred
 
-    def get_params(self, deep=True):
-        out = dict()
-        for key in self._get_param_names():
-            try:
-                value = getattr(self, key)
-            except AttributeError:
-                warnings.warn(
-                    "From version 0.24, get_params will raise an "
-                    "AttributeError if a parameter cannot be "
-                    "retrieved as an instance attribute. Previously "
-                    "it would return None.",
-                    FutureWarning,
-                )
-                value = None
-            if deep and hasattr(value, "get_params"):
-                deep_items = value.get_params().items()
-                out.update((key + "__" + k, val) for k, val in deep_items)
-            out[key] = value
-        return out
-
 
 class DNDT_Ensemble:
     def __init__(self, n_trees, num_cut, num_class, epoch, temperature):
@@ -149,6 +126,7 @@ class DNDT_Ensemble:
 
         y_train_pred = self.predict(X_train)
         train_acc = accuracy_score(y_train, y_train_pred)
+        cm = ConfusionMatrixDisplay.from_predictions(y_train, y_train_pred)
         print("Train Accuracy:", train_acc)
 
     def predict(self, X_test):
@@ -169,27 +147,31 @@ if __name__ == "__main__":
     # torch.manual_seed(1943)
 
     # seed = random.seed(1990)
-    _x, _y = get_german_data()
-    # _x, _y = get_connect4_data()
+    # _x, _y = get_german_data()
+    _x, _y = get_connect4_data()
 
     X_train, X_test, y_train, y_test = train_test_split(_x, _y, train_size=0.70)
     # print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
 
     d = X_train.shape[1]
-    num_cut = [1, 1, 1, 1, 1, 1, 1, 1]  # "Petal length" and "Petal width"
-    num_class = 3
-    epoch = 1000
+    num_cut = [1, 1, 1, 1, 1, 1, 1, 1, 1]
+    num_class = 4
+    epoch = 2000
     temperature = 0.1
 
-    # 1. 初始化模型
-    n_trees = 10
-    ensemble_model = DNDT_Ensemble(n_trees, num_cut, num_class, epoch, temperature)
+    # # 1. 初始化模型
+    # n_trees = 10
+    # ensemble_model = DNDT_Ensemble(n_trees, num_cut, num_class, epoch, temperature)
 
-    # 2. 擬合數據
-    ensemble_model.fit(X_train, y_train)
+    # # 2. 擬合數據
+    # ensemble_model.fit(X_train, y_train)
 
-    # 3. 預測
-    y_pred_ensemble = ensemble_model.predict(X_test)
+    # # 3. 預測
+    # y_pred_ensemble = ensemble_model.predict(X_test)
+
+    model = DNDT_Classifier(num_cut, num_class, epoch, temperature)
+    model.fit(X_train, y_train)
+    y_pred_ensemble = np.argmax(model.predict(X_test).cpu().detach().numpy(), axis=1)
 
     # 計算精確度
     acc_ensemble = accuracy_score(y_test, y_pred_ensemble)
